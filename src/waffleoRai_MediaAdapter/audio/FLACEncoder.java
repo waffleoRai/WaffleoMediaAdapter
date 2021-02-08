@@ -18,11 +18,13 @@ import waffleoRai_Utils.FileBuffer;
 
 public class FLACEncoder implements IAudioEncoder{
 	
-	protected static final String libname = "wrma_nat";
+	protected static final String libname = "libwraimedaptnat";
 	
 	private List<String> temp_paths;
 	
-	public FLACEncoder(){
+	public FLACEncoder() throws LibraryNotFoundException{
+		//Load lib on first attempt to construct. If fails, throw the LibraryNotFoundException
+		
 		temp_paths = new LinkedList<String>();
 	}
 
@@ -35,10 +37,11 @@ public class FLACEncoder implements IAudioEncoder{
 		}
 	}
 	
-	protected native boolean openStream(String path, int sampleRate, int bitsPerSample, int channels);
-	protected native int getSamplesPerBlock();
-	protected native boolean passSamples(int[][] sample_32, int sampleCount);
-	protected native void closeStream();
+	protected native long openStream(String path, int sampleRate, int bitsPerSample, int channels);
+	protected native long openStream(String path, int sampleRate, int bitsPerSample, int channels, int frames);
+	protected native int getSamplesPerBlock(long strHandle);
+	protected native int passSamples(long strHandle, int[] sample_32, int arraySize);
+	protected native boolean closeStream(long strHandle);
 	
 	public InputStream encode(Sound src) throws IOException{
 		if(temp_paths == null) throw new IOException("Encoder has been disposed of!");
@@ -48,33 +51,37 @@ public class FLACEncoder implements IAudioEncoder{
 		temp_paths.add(tpath);
 		
 		int ccount = src.totalChannels();
-		if(!openStream(tpath, src.getSampleRate(), src.getBitDepth().getBitCount(), ccount)){
+		int bitcount =src.getBitDepth().getBitCount();
+		long handle = openStream(tpath, src.getSampleRate(), bitcount, ccount);
+		if(handle == 0L){
 			throw new IOException("FLACEncoder.encode || Failed to open stream!");
 		}
 		
-		int bsz = getSamplesPerBlock();
+		int bsz = getSamplesPerBlock(handle);
+		int shamt = 32 - bitcount;
 		AudioSampleStream str = src.createSampleStream(false);
+		int passsize = bsz*ccount;
 		while(!str.done()){
-			int[][] sblock = new int[ccount][bsz];
-			for(int i = 0; i < bsz; i++){
+			int[] sblock = new int[passsize];
+			for(int i = 0; i < bsz; i+=ccount){
 				int[] samps = null;
 				try{samps = str.nextSample();}
 				catch(Exception x){
 					x.printStackTrace();
-					closeStream();
+					closeStream(handle);
 					throw new IOException("FLACEncoder.encode || Error retrieving audio data. Output terminated.");
 				}
-				for(int c = 0; c < ccount; i++){
-					sblock[c][i] = samps[c];
+				for(int c = 0; c < ccount; c++){
+					sblock[i+c] = (samps[c] << shamt) >> shamt; //Ensure sign-extension
 				}
 			}
-			if(!passSamples(sblock, bsz)){
-				closeStream();
+			if(passSamples(handle, sblock, passsize) < 0){
+				closeStream(handle);
 				throw new IOException("FLACEncoder.encode || Error writing stream. Output terminated.");
 			}
 		}
 		
-		closeStream();
+		closeStream(handle);
 		
 		//Reopen.
 		BufferedInputStream is = new BufferedInputStream(new FileInputStream(tpath));
