@@ -40,9 +40,11 @@ typedef struct vid_info{
     int height;
 
     float fps;
+    int timebase_n;
+    int timebase_d;
     int total_frames;
 
-    byte flags;
+    uint16_t flags;
     int32_t bitrate;
     int32_t keyintr;
 

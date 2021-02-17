@@ -119,7 +119,7 @@ public class CMediaAdapter {
 		switch(my_os) {
 		case OS_LINUX:
 			ext = "so";
-			osdir = "linux";
+			osdir = "lnx";
 			break;
 		case OS_MACOSX:
 			ext = "so";
@@ -194,7 +194,11 @@ public class CMediaAdapter {
 
 	public static boolean libraryLoadable(String libname) {
 		//Library must not be currently loaded and previous attempt must not have been made since last failure clear
-		return !load_exp_map.containsKey(libname);
+		return !attempt_map.contains(libname) && !load_exp_map.containsKey(libname);
+	}
+	
+	public static boolean libraryLoaded(String libname) {
+		return attempt_map.contains(libname) && !load_exp_map.containsKey(libname);
 	}
 	
 	public static void clearAttemptFailures() {
@@ -202,7 +206,9 @@ public class CMediaAdapter {
 		//But only failures are in the exception map.
 		//So delete any library names that are in the exception map AND attempt map
 		//And clear exception map
-		//TODO
+
+		attempt_map.removeAll(load_exp_map.keySet());
+		load_exp_map.clear();
 	}
 	
 }
