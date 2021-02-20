@@ -7,13 +7,14 @@
 
 /*----- Open/Alloc -----*/
 
-vp9a_encode_ctx_t* alloc_ctx(char* outpath, vid_info_t* info){
+vp9a_encode_ctx_t* alloc_ctx(const char* outpath, vid_info_t* info){
 
     vp9a_encode_ctx_t* myctx = (vp9a_encode_ctx_t*)malloc(sizeof(vp9a_encode_ctx_t)); //Allocate
 
     //Set args
     myctx->outpath = outpath;
     myctx->info = info;
+	myctx->bytes_per_frame = 0;
     myctx->frames_written = 0;
     myctx->frames_per_callback = -1;
     myctx->write_callback = NULL;
@@ -110,7 +111,7 @@ vp9a_error_t configAndInit(vp9a_encode_ctx_t* myctx, VpxInterface* encoder){
     return NO_ERROR;
 }
 
-vp9a_encode_ctx_t* vp9a_openRGBEncoder(char* outpath, vid_info_t* info){
+vp9a_encode_ctx_t* vp9a_openRGBEncoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
@@ -132,6 +133,10 @@ vp9a_encode_ctx_t* vp9a_openRGBEncoder(char* outpath, vid_info_t* info){
             return myctx;
         }
     }
+	
+	//Calculate bytes per frame
+	//(3*w*h)
+	myctx->bytes_per_frame = 3 * myctx->info->width * myctx->info->height;
 
     //Generate codec info
     const VpxInterface* encoder = gen_codec_info(myctx);
@@ -155,7 +160,7 @@ vp9a_encode_ctx_t* vp9a_openRGBEncoder(char* outpath, vid_info_t* info){
     return myctx;
 }
 
-vp9a_encode_ctx_t* vp9a_openARGBEncoder(char* outpath, vid_info_t* info){
+vp9a_encode_ctx_t* vp9a_openARGBEncoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
@@ -177,6 +182,10 @@ vp9a_encode_ctx_t* vp9a_openARGBEncoder(char* outpath, vid_info_t* info){
             return myctx;
         }
     }
+	
+	//Calculate bytes per frame
+	//(4*w*h)
+	myctx->bytes_per_frame = (myctx->info->width * myctx->info->height) << 2;
 
     //Generate codec info
     const VpxInterface* encoder = gen_codec_info(myctx);
@@ -200,7 +209,7 @@ vp9a_encode_ctx_t* vp9a_openARGBEncoder(char* outpath, vid_info_t* info){
     return myctx;
 }
 
-vp9a_encode_ctx_t* vp9a_openYUV420Encoder(char* outpath, vid_info_t* info){
+vp9a_encode_ctx_t* vp9a_openYUV420Encoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
@@ -222,6 +231,10 @@ vp9a_encode_ctx_t* vp9a_openYUV420Encoder(char* outpath, vid_info_t* info){
             return myctx;
         }
     }
+	
+	//Calculate bytes per frame
+	myctx->bytes_per_frame = 3 * myctx->info->width * myctx->info->height; //This gives double (2 * 1.5 * w * h)
+	if(!myctx->sixteen) myctx->bytes_per_frame >>= 1; //Half if not wide
 
     //Generate codec info
     const VpxInterface* encoder = gen_codec_info(myctx);
@@ -258,7 +271,7 @@ vp9a_encode_ctx_t* vp9a_openYUV420Encoder(char* outpath, vid_info_t* info){
     return myctx;
 }
 
-vp9a_encode_ctx_t* vp9a_openYUV422Encoder(char* outpath, vid_info_t* info){
+vp9a_encode_ctx_t* vp9a_openYUV422Encoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
@@ -280,6 +293,10 @@ vp9a_encode_ctx_t* vp9a_openYUV422Encoder(char* outpath, vid_info_t* info){
             return myctx;
         }
     }
+	
+	//Calculate bytes per frame
+	myctx->bytes_per_frame = 2 * myctx->info->width * myctx->info->height; //[ (1Y + 0.5U + 0.5V) * w * h]
+	if(myctx->sixteen) myctx->bytes_per_frame <<= 1; //Double if wide
 
     //Generate codec info
     const VpxInterface* encoder = gen_codec_info(myctx);
@@ -316,7 +333,7 @@ vp9a_encode_ctx_t* vp9a_openYUV422Encoder(char* outpath, vid_info_t* info){
     return myctx;
 }
 
-vp9a_encode_ctx_t* vp9a_openYUV444Encoder(char* outpath, vid_info_t* info){
+vp9a_encode_ctx_t* vp9a_openYUV444Encoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
@@ -338,6 +355,10 @@ vp9a_encode_ctx_t* vp9a_openYUV444Encoder(char* outpath, vid_info_t* info){
             return myctx;
         }
     }
+	
+	//Calculate bytes per frame
+	myctx->bytes_per_frame = 3 * myctx->info->width * myctx->info->height; //[ (1Y + 1U + 1V) * w * h]
+	if(myctx->sixteen) myctx->bytes_per_frame <<= 1; //Double if wide
 
     //Generate codec info
     const VpxInterface* encoder = gen_codec_info(myctx);
@@ -437,7 +458,7 @@ boolean flush_encoder(vp9a_encode_ctx_t* ctx){
     return TRUE;
 }
 
-int vp9a_closeEncoder(vp9a_encode_ctx_t* ctx){
+vp9a_error vp9a_closeEncoder(vp9a_encode_ctx_t* ctx){
 
     //Release vpx resources
     if(!flush_encoder(ctx)) ctx->error_code = FAILED_CLOSE;
@@ -450,9 +471,11 @@ int vp9a_closeEncoder(vp9a_encode_ctx_t* ctx){
     free(ctx->cfg);
 
     //Release adapter resources
+	vp9a_error err = ctx->error_code;
+	free(ctx->info);
     free(ctx);
 
-    return ctx->error_code != NO_ERROR;
+    return err;
 }
 
 /*----- Frame Wrapping/Conversion -----*/
@@ -537,6 +560,29 @@ vpx_image_t* readPlanarFrame(vpx_image_t* container, void* data){
 }
 
 /*----- Misc. Utils -----*/
+
+int vp9a_freeError(vp9a_encode_ctx_t* ctx){
+	//Frees all resources form a ctx that has encountered an error
+	//DOES free the out path
+	int err = 0;
+	
+	if(ctx == NULL) return 0;
+	
+	if(ctx->outpath) free(ctx->outpath);
+	
+    if(ctx->img_container) vpx_img_free(ctx->img_container);
+    if (ctx->codec){
+		if (vpx_codec_destroy(ctx->codec)) err = 1;
+	}
+    if(ctx->writer) vpx_video_writer_close(ctx->writer);
+	
+	if(ctx->vpxinfo) free(ctx->vpxinfo);
+    if(ctx->cfg) free(ctx->cfg);
+	if(ctx->info) free(ctx->info);
+    free(ctx);
+	
+	return err;
+}
 
 void setTimebaseFromFramerate(vid_info_t* info){
     if(info == NULL) return;

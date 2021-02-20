@@ -17,6 +17,7 @@ import waffleoRai_MediaAdapter.CMediaAdapter.LibraryNotFoundException;
 import waffleoRai_Video.IVideoSource;
 import waffleoRai_Video.VideoFrameStream;
 import waffleoRai_Video.VideoIO;
+import waffleoRai_Video.VideoIO.Rational;
 
 
 /*
@@ -72,8 +73,8 @@ public class VP9Encoder implements IVideoEncoder{
 	public void setKeyInterval(int val) {keyint = val;}
 	public void setCallback(VoidCallbackMethod method, int framesPerCallback) {write_callback = method; frames_per_callback = framesPerCallback;}
 	
-	protected native long openLosslessStream(String path, int bitfields, int frameWidth, int frameHeight, float fps);
-	protected native long openLossyStream(String path, int bitfields, int frameWidth, int frameHeight, float fps, int bitrate, int keyint);
+	protected native long openLosslessStream(String path, int bitfields, int frameWidth, int frameHeight, int fps_n, int fps_d);
+	protected native long openLossyStream(String path, int bitfields, int frameWidth, int frameHeight, int fps_n, int fps_d, int bitrate, int keyint);
 	protected native int setCallbackTime(long handle, int framesPerCallback);
 	protected native int writeFrame(long handle, byte[] framedata);
 	protected native int writeFrames(long handle, byte[] framedata, int frameCount);
@@ -119,7 +120,8 @@ public class VP9Encoder implements IVideoEncoder{
 		int clrType = video.getRawDataColorspace();
 		int fwidth = video.getWidth();
 		int fheight = video.getHeight();
-		double frate = video.getFrameRate();
+		//double frate = video.getFrameRate();
+		Rational frate = video.getFrameRateRational();
 		
 		//Generate temp path
 		String temppath = FileBuffer.generateTemporaryPath("vp9encoder_strtemp");
@@ -128,8 +130,8 @@ public class VP9Encoder implements IVideoEncoder{
 		
 		//Open
 		long handle = 0;
-		if(lossless) handle = openLosslessStream(temppath, bitfields, fwidth, fheight, (float)frate);
-		else handle = openLossyStream(temppath, bitfields, fwidth, fheight, (float)frate, bitrate, keyint);
+		if(lossless) handle = openLosslessStream(temppath, bitfields, fwidth, fheight, frate.numerator, frate.denominator);
+		else handle = openLossyStream(temppath, bitfields, fwidth, fheight, frate.numerator, frate.denominator, bitrate, keyint);
 		if(handle == 0L) throw new IOException("NULL handle - encode stream open failed!");
 		
 		//Write frames

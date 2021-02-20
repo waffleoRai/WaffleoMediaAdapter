@@ -69,10 +69,11 @@ typedef enum vp9a_error{
 
 typedef struct vp9a_encode_ctx{
 
-    char* outpath;
+    const char* outpath;
     //FILE* fhandle;
 
     vid_info_t* info;
+	int bytes_per_frame;
 
     int frames_written;
     int frames_per_callback;
@@ -103,19 +104,20 @@ typedef struct vp9a_encode_ctx{
 } vp9a_encode_ctx_t;
 
 //vp9a_encode_ctx_t* vp9a_openEncoder(char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openRGBEncoder(char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openARGBEncoder(char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openYUV420Encoder(char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openYUV422Encoder(char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openYUV444Encoder(char* outpath, vid_info_t* info);
+vp9a_encode_ctx_t* vp9a_openRGBEncoder(const char* outpath, vid_info_t* info);
+vp9a_encode_ctx_t* vp9a_openARGBEncoder(const char* outpath, vid_info_t* info);
+vp9a_encode_ctx_t* vp9a_openYUV420Encoder(const char* outpath, vid_info_t* info);
+vp9a_encode_ctx_t* vp9a_openYUV422Encoder(const char* outpath, vid_info_t* info);
+vp9a_encode_ctx_t* vp9a_openYUV444Encoder(const char* outpath, vid_info_t* info);
 
 int write_frame(vp9a_encode_ctx_t* ctx, byte* data);
-int vp9a_closeEncoder(vp9a_encode_ctx_t* ctx);
+vp9a_error vp9a_closeEncoder(vp9a_encode_ctx_t* ctx);
 
 vpx_image_t* readRGBFrame(vpx_image_t* container, void* data);
 vpx_image_t* readARGBFrame(vpx_image_t* container, void* data);
 vpx_image_t* readPlanarFrame(vpx_image_t* container, void* data);
 
+int vp9a_freeError(vp9a_encode_ctx_t* ctx);
 void setTimebaseFromFramerate(vid_info_t* info);
 
 
