@@ -1,60 +1,67 @@
 #ifndef WRMA_VIDDEFS_H_INCLUDED
 #define WRMA_VIDDEFS_H_INCLUDED
 
-#include "quickDefs.h"
 
-typedef struct argb_pixel{
-    uint8_t alpha;
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-} argb_pixel_t;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct rgb_pixel{
-    uint8_t red;
-    uint8_t green;
-    uint8_t blue;
-} rgb_pixel_t;
+    typedef struct argb_pixel {
+        uint8_t alpha;
+        uint8_t red;
+        uint8_t green;
+        uint8_t blue;
+    } argb_pixel_t;
 
-typedef struct argb_img{
+    typedef struct rgb_pixel {
+        uint8_t red;
+        uint8_t green;
+        uint8_t blue;
+    } rgb_pixel_t;
 
-    int width;
-    int height;
+    typedef struct argb_img {
 
-    argb_pixel_t* data;
+        int width;
+        int height;
 
-} argb_img_t;
+        argb_pixel_t* data;
 
-typedef struct rgb_img{
+    } argb_img_t;
 
-    int width;
-    int height;
+    typedef struct rgb_img {
 
-    rgb_pixel_t* data;
+        int width;
+        int height;
 
-} rgb_img_t;
+        rgb_pixel_t* data;
 
-typedef struct vid_info{
+    } rgb_img_t;
 
-    int width;
-    int height;
+    typedef struct vid_info {
 
-    float fps;
-    int timebase_n;
-    int timebase_d;
-    int total_frames;
+        int width;
+        int height;
 
-    uint16_t flags;
-    int32_t bitrate;
-    int32_t keyintr;
+        float fps;
+        int timebase_n;
+        int timebase_d;
+        int total_frames;
 
-} vid_info_t;
+        uint16_t flags;
+        int32_t bitrate;
+        int32_t keyintr;
 
-typedef struct vid_codec_args{
+    } vid_info_t;
 
-    int argc;
-    char** argv;
+    typedef struct vid_codec_args {
 
-} vid_codec_args_t;
+        int argc;
+        char** argv;
+
+    } vid_codec_args_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // WRMA_VIDDEFS_H_INCLUDED

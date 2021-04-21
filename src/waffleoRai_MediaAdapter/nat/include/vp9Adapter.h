@@ -9,6 +9,7 @@
 #include "libvpx/vp9/common/vp9_common.h"
 #include "libvpx/tools_common.h"
 #include "libvpx/video_writer.h"
+#include "mediaadapterutils.h"
 #include "videoDefs.h"
 
 //Pass a flags field (16 bits) with encoding info
@@ -34,16 +35,20 @@
 
 */
 
-typedef enum colorModel{
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef WRMA_DLL_API enum colorModel{
     RGB = 0,
     ARGB = 1,
     BT601 = 2,
     BT709 = 3,
     BT2020 = 4,
-    SETME = 7
+    CLR_SETME = 7
 } colorModel_t;
 
-typedef enum pixfmt{
+typedef WRMA_DLL_API enum pixfmt{
     STANDARD = 0,
     YUV_I420 = 1,
     YUV_I422 = 2,
@@ -51,7 +56,7 @@ typedef enum pixfmt{
     SETME = 7
 } pixfmt_t;
 
-typedef enum vp9a_error{
+typedef WRMA_DLL_API enum vp9a_error{
     NO_ERROR = 0,
     UNSUPPORTED_FMT = 1,
     CODEC_NOT_FOUND = 2,
@@ -67,7 +72,7 @@ typedef enum vp9a_error{
     FAILED_CLOSE = 12
 } vp9a_error_t;
 
-typedef struct vp9a_encode_ctx{
+typedef WRMA_DLL_API struct vp9a_encode_ctx{
 
     const char* outpath;
     //FILE* fhandle;
@@ -96,7 +101,17 @@ typedef struct vp9a_encode_ctx{
     vpx_codec_ctx_t* codec;
     VpxVideoInfo* vpxinfo;
     vpx_codec_enc_cfg_t* cfg;
-    VpxVideoWriter* writer;
+
+    union WriteTarget {
+        VpxVideoWriter* writer;
+        ubyte* buffer_ptr;
+    } target;
+    uint32_t amt_written = 0;
+    vp9a_error_t(*writerMethod)(vp9a_encode_ctx_t*, const vpx_codec_cx_pkt_t*);
+
+    //Position/Last frame info
+    uint64_t time_pos; //Time coord of last frame copied to output
+    boolean last_was_key; //Last frame copied to output was a keyframe
 
     //Error
     vp9a_error_t error_code;
@@ -104,21 +119,32 @@ typedef struct vp9a_encode_ctx{
 } vp9a_encode_ctx_t;
 
 //vp9a_encode_ctx_t* vp9a_openEncoder(char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openRGBEncoder(const char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openARGBEncoder(const char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openYUV420Encoder(const char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openYUV422Encoder(const char* outpath, vid_info_t* info);
-vp9a_encode_ctx_t* vp9a_openYUV444Encoder(const char* outpath, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openFileEncoder(const char* outpath, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openRGBFileEncoder(const char* outpath, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openARGBFileEncoder(const char* outpath, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openYUV420FileEncoder(const char* outpath, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openYUV422FileEncoder(const char* outpath, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openYUV444FileEncoder(const char* outpath, vid_info_t* info);
 
-int write_frame(vp9a_encode_ctx_t* ctx, byte* data);
-vp9a_error vp9a_closeEncoder(vp9a_encode_ctx_t* ctx);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openStreamEncoder(ubyte* buffer, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openRGBStreamEncoder(ubyte* buffer, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openARGBStreamEncoder(ubyte* buffer, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openYUV420StreamEncoder(ubyte* buffer, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openYUV422StreamEncoder(ubyte* buffer, vid_info_t* info);
+WRMA_DLL_API vp9a_encode_ctx_t* vp9a_openYUV444StreamEncoder(ubyte* buffer, vid_info_t* info);
 
-vpx_image_t* readRGBFrame(vpx_image_t* container, void* data);
-vpx_image_t* readARGBFrame(vpx_image_t* container, void* data);
-vpx_image_t* readPlanarFrame(vpx_image_t* container, void* data);
+WRMA_DLL_API int write_frame(vp9a_encode_ctx_t* ctx, ubyte* data);
+WRMA_DLL_API vp9a_error_t vp9a_closeEncoder(vp9a_encode_ctx_t* ctx);
 
-int vp9a_freeError(vp9a_encode_ctx_t* ctx);
-void setTimebaseFromFramerate(vid_info_t* info);
+WRMA_DLL_API vpx_image_t* readRGBFrame(vpx_image_t* container, void* data);
+WRMA_DLL_API vpx_image_t* readARGBFrame(vpx_image_t* container, void* data);
+WRMA_DLL_API vpx_image_t* readPlanarFrame(vpx_image_t* container, void* data);
 
+WRMA_DLL_API int vp9a_freeError(vp9a_encode_ctx_t* ctx);
+WRMA_DLL_API void setTimebaseFromFramerate(vid_info_t* info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // VP9ADAPTER_H_INCLUDED

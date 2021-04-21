@@ -4,7 +4,6 @@
 #define FALSE 0
 #define TRUE 1
 
-
 /*----- Open/Alloc -----*/
 
 vp9a_encode_ctx_t* alloc_ctx(const char* outpath, vid_info_t* info){
@@ -18,14 +17,18 @@ vp9a_encode_ctx_t* alloc_ctx(const char* outpath, vid_info_t* info){
     myctx->frames_written = 0;
     myctx->frames_per_callback = -1;
     myctx->write_callback = NULL;
+    myctx->writerMethod = NULL;
     myctx->bitrate = info->bitrate;
     myctx->keyframe_interval = info->keyintr;
     myctx->func_frameload = NULL;
     myctx->img_container = NULL;
     myctx->codec = NULL;
     myctx->cfg = NULL;
-    myctx->writer = NULL;
+    myctx->target.writer = NULL;
     myctx->error_code = NO_ERROR;
+
+    myctx->time_pos = 0;
+    myctx->last_was_key = FALSE;
 
     //Check parameters...
     if(info->width <= 0 || info->width % 2 != 0 || info->height <= 0 || info->height % 2 != 0){
@@ -94,9 +97,13 @@ vp9a_error_t configAndInit(vp9a_encode_ctx_t* myctx, VpxInterface* encoder){
     myctx->cfg->g_timebase.den = myctx->vpxinfo->time_base.denominator;
     if(!myctx->is_lossless) myctx->cfg->rc_target_bitrate = myctx->bitrate;
 
-    //Open writer
-    myctx->writer = vpx_video_writer_open(myctx->outpath, kContainerIVF, myctx->vpxinfo);
-    if(!myctx->writer){myctx->error_code = FILE_IO_ERROR; return FILE_IO_ERROR;}
+    //Open writer (if applicable)
+    if (myctx->outpath) {
+        myctx->target.writer = vpx_video_writer_open(myctx->outpath, kContainerIVF, myctx->vpxinfo);
+        if (!myctx->target.writer) { myctx->error_code = FILE_IO_ERROR; return FILE_IO_ERROR; }
+        myctx->writerMethod = writeToWriter;
+    }
+    else myctx->writerMethod = writeToBuffer;
 
     //Init codec
     if (vpx_codec_enc_init(myctx->codec, encoder->codec_interface(), myctx->cfg, 0)){
@@ -111,11 +118,54 @@ vp9a_error_t configAndInit(vp9a_encode_ctx_t* myctx, VpxInterface* encoder){
     return NO_ERROR;
 }
 
+vp9a_encode_ctx_t* vp9a_openFileEncoder(const char* outpath, vid_info_t* info) {
+    //Get format and switch on format...
+
+    uint32_t pfmt = (uint32_t)info->flags;
+    pfmt &= 0x00e0;
+    pfmt >>= 5;
+
+    pixfmt_t e = (pixfmt_t)pfmt;
+    switch (e) {
+    case STANDARD: 
+        return vp9a_openRGBFileEncoder(outpath, info);
+    case YUV_I420:
+        return vp9a_openYUV420FileEncoder(outpath, info);
+    case YUV_I422:
+        return vp9a_openYUV422FileEncoder(outpath, info);
+    case PLANAR_444:
+        return vp9a_openYUV444FileEncoder(outpath, info);
+    }
+
+    return NULL;
+}
+
+vp9a_encode_ctx_t* vp9a_openStreamEncoder(ubyte* buffer, vid_info_t* info) {
+    uint32_t pfmt = (uint32_t)info->flags;
+    pfmt &= 0x00e0;
+    pfmt >>= 5;
+
+    pixfmt_t e = (pixfmt_t)pfmt;
+    switch (e) {
+    case STANDARD:
+        return vp9a_openRGBStreamEncoder(buffer, info);
+    case YUV_I420:
+        return vp9a_openYUV420StreamEncoder(buffer, info);
+    case YUV_I422:
+        return vp9a_openYUV422StreamEncoder(buffer, info);
+    case PLANAR_444:
+        return vp9a_openYUV444StreamEncoder(buffer, info);
+    }
+
+    return NULL;
+}
+
+// --- RGB
 vp9a_encode_ctx_t* vp9a_openRGBEncoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
-    if(outpath == NULL || info == NULL) return NULL;
+    if(info == NULL) return NULL;
     vp9a_encode_ctx_t* myctx = alloc_ctx(outpath, info);
 
     //Check format enums to make sure they match...
@@ -127,7 +177,7 @@ vp9a_encode_ctx_t* vp9a_openRGBEncoder(const char* outpath, vid_info_t* info){
         }
     }
     if(myctx->input_clr != RGB){
-        if(myctx->input_fmt == SETME) myctx->input_clr = RGB;
+        if(myctx->input_clr == CLR_SETME) myctx->input_clr = RGB;
         else{
             myctx->error_code = FMT_MISMATCH;
             return myctx;
@@ -160,11 +210,23 @@ vp9a_encode_ctx_t* vp9a_openRGBEncoder(const char* outpath, vid_info_t* info){
     return myctx;
 }
 
+vp9a_encode_ctx_t* vp9a_openRGBFileEncoder(const char* outpath, vid_info_t* info) {
+    return vp9a_openRGBEncoder(outpath, info);
+}
+
+vp9a_encode_ctx_t* vp9a_openRGBStreamEncoder(ubyte* buffer, vid_info_t* info) {
+    vp9a_encode_ctx_t* ctx = vp9a_openRGBEncoder(NULL, info);
+    ctx->target.buffer_ptr = buffer;
+    return ctx;
+}
+
+// --- ARGB
+
 vp9a_encode_ctx_t* vp9a_openARGBEncoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
     //Allocate context and copy info to it
-    if(outpath == NULL || info == NULL) return NULL;
+    if(info == NULL) return NULL;
     vp9a_encode_ctx_t* myctx = alloc_ctx(outpath, info);
 
     //Check format enums to make sure they match...
@@ -176,7 +238,7 @@ vp9a_encode_ctx_t* vp9a_openARGBEncoder(const char* outpath, vid_info_t* info){
         }
     }
     if(myctx->input_clr != ARGB){
-        if(myctx->input_fmt == SETME) myctx->input_clr = ARGB;
+        if(myctx->input_clr == CLR_SETME) myctx->input_clr = ARGB;
         else{
             myctx->error_code = FMT_MISMATCH;
             return myctx;
@@ -209,6 +271,18 @@ vp9a_encode_ctx_t* vp9a_openARGBEncoder(const char* outpath, vid_info_t* info){
     return myctx;
 }
 
+vp9a_encode_ctx_t* vp9a_openARGBFileEncoder(const char* outpath, vid_info_t* info) {
+    return vp9a_openARGBEncoder(outpath, info);
+}
+
+vp9a_encode_ctx_t* vp9a_openARGBStreamEncoder(ubyte* buffer, vid_info_t* info) {
+    vp9a_encode_ctx_t* ctx = vp9a_openARGBEncoder(NULL, info);
+    ctx->target.buffer_ptr = buffer;
+    return ctx;
+}
+
+// --- YUV420
+
 vp9a_encode_ctx_t* vp9a_openYUV420Encoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
@@ -225,7 +299,7 @@ vp9a_encode_ctx_t* vp9a_openYUV420Encoder(const char* outpath, vid_info_t* info)
         }
     }
     if(!(myctx->input_clr == BT601 || myctx->input_clr == BT709 || myctx->input_clr == BT2020)){
-        if(myctx->input_fmt == SETME) myctx->input_clr = BT601;
+        if(myctx->input_clr == CLR_SETME) myctx->input_clr = BT601;
         else{
             myctx->error_code = FMT_MISMATCH;
             return myctx;
@@ -271,6 +345,18 @@ vp9a_encode_ctx_t* vp9a_openYUV420Encoder(const char* outpath, vid_info_t* info)
     return myctx;
 }
 
+vp9a_encode_ctx_t* vp9a_openYUV420FileEncoder(const char* outpath, vid_info_t* info) {
+    return vp9a_openYUV420Encoder(outpath, info);
+}
+
+vp9a_encode_ctx_t* vp9a_openYUV420StreamEncoder(ubyte* buffer, vid_info_t* info) {
+    vp9a_encode_ctx_t* ctx = vp9a_openYUV420Encoder(NULL, info);
+    ctx->target.buffer_ptr = buffer;
+    return ctx;
+}
+
+// --- YUV422
+
 vp9a_encode_ctx_t* vp9a_openYUV422Encoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
@@ -287,7 +373,7 @@ vp9a_encode_ctx_t* vp9a_openYUV422Encoder(const char* outpath, vid_info_t* info)
         }
     }
     if(!(myctx->input_clr == BT601 || myctx->input_clr == BT709 || myctx->input_clr == BT2020)){
-        if(myctx->input_fmt == SETME) myctx->input_clr = BT601;
+        if(myctx->input_clr == CLR_SETME) myctx->input_clr = BT601;
         else{
             myctx->error_code = FMT_MISMATCH;
             return myctx;
@@ -333,6 +419,18 @@ vp9a_encode_ctx_t* vp9a_openYUV422Encoder(const char* outpath, vid_info_t* info)
     return myctx;
 }
 
+vp9a_encode_ctx_t* vp9a_openYUV422FileEncoder(const char* outpath, vid_info_t* info) {
+    return vp9a_openYUV422Encoder(outpath, info);
+}
+
+vp9a_encode_ctx_t* vp9a_openYUV422StreamEncoder(ubyte* buffer, vid_info_t* info) {
+    vp9a_encode_ctx_t* ctx = vp9a_openYUV422Encoder(NULL, info);
+    ctx->target.buffer_ptr = buffer;
+    return ctx;
+}
+
+// --- YUV444
+
 vp9a_encode_ctx_t* vp9a_openYUV444Encoder(const char* outpath, vid_info_t* info){
     //This uses the examples in the libvpx documentation
 
@@ -349,7 +447,7 @@ vp9a_encode_ctx_t* vp9a_openYUV444Encoder(const char* outpath, vid_info_t* info)
         }
     }
     if(!(myctx->input_clr == BT601 || myctx->input_clr == BT709 || myctx->input_clr == BT2020)){
-        if(myctx->input_fmt == SETME) myctx->input_clr = BT601;
+        if(myctx->input_clr == CLR_SETME) myctx->input_clr = BT601;
         else{
             myctx->error_code = FMT_MISMATCH;
             return myctx;
@@ -395,9 +493,19 @@ vp9a_encode_ctx_t* vp9a_openYUV444Encoder(const char* outpath, vid_info_t* info)
     return myctx;
 }
 
+vp9a_encode_ctx_t* vp9a_openYUV444FileEncoder(const char* outpath, vid_info_t* info) {
+    return vp9a_openYUV444Encoder(outpath, info);
+}
+
+vp9a_encode_ctx_t* vp9a_openYUV444StreamEncoder(ubyte* buffer, vid_info_t* info) {
+    vp9a_encode_ctx_t* ctx = vp9a_openYUV444Encoder(NULL, info);
+    ctx->target.buffer_ptr = buffer;
+    return ctx;
+}
+
 /*----- Write/Close -----*/
 
-int write_frame(vp9a_encode_ctx_t* ctx, byte* data){
+int write_frame(vp9a_encode_ctx_t* ctx, ubyte* data){
 
     //Wrap data
     boolean any_written = FALSE;
@@ -419,10 +527,12 @@ int write_frame(vp9a_encode_ctx_t* ctx, byte* data){
     while ((pkt = vpx_codec_get_cx_data(ctx->codec, &iter)) != NULL) {
         any_written = TRUE;
         if (pkt->kind == VPX_CODEC_CX_FRAME_PKT) {
-            const int keyframe = (pkt->data.frame.flags & VPX_FRAME_IS_KEY) != 0;
+            /*const int keyframe = (pkt->data.frame.flags & VPX_FRAME_IS_KEY) != 0;
             if (!vpx_video_writer_write_frame(ctx->writer, pkt->data.frame.buf, pkt->data.frame.sz, pkt->data.frame.pts)) {
                 return 4;
-            }
+            }*/
+            ctx->error_code = ctx->writerMethod(ctx, pkt);
+            if (ctx->error_code != NO_ERROR) return 4;
         }
    }
   
@@ -448,7 +558,9 @@ boolean flush_encoder(vp9a_encode_ctx_t* ctx){
             haspkts = TRUE;
   
             if (pkt->kind == VPX_CODEC_CX_FRAME_PKT) {
-                if (!vpx_video_writer_write_frame(ctx->writer, pkt->data.frame.buf, pkt->data.frame.sz, pkt->data.frame.pts)) {return FALSE;}
+                //if (!vpx_video_writer_write_frame(ctx->writer, pkt->data.frame.buf, pkt->data.frame.sz, pkt->data.frame.pts)) {return FALSE;}
+                ctx->error_code = ctx->writerMethod(ctx, pkt);
+                if (ctx->error_code != NO_ERROR) return FALSE;
                 fflush(stdout);
             }
         }
@@ -458,20 +570,24 @@ boolean flush_encoder(vp9a_encode_ctx_t* ctx){
     return TRUE;
 }
 
-vp9a_error vp9a_closeEncoder(vp9a_encode_ctx_t* ctx){
+vp9a_error_t vp9a_closeEncoder(vp9a_encode_ctx_t* ctx){
 
     //Release vpx resources
     if(!flush_encoder(ctx)) ctx->error_code = FAILED_CLOSE;
     vpx_img_free(ctx->img_container);
     if (vpx_codec_destroy(ctx->codec)) ctx->error_code = FAILED_CLOSE;
-    vpx_video_writer_close(ctx->writer);
+
+    if(ctx->outpath){
+        //Assumes it's written to a file. So close writer.
+        vpx_video_writer_close(ctx->target.writer);
+    }
 
     //vpxinfo and vpxcfg must also be freed as they are malloc'd by open protocol
     free(ctx->vpxinfo);
     free(ctx->cfg);
 
     //Release adapter resources
-	vp9a_error err = ctx->error_code;
+	vp9a_error_t err = ctx->error_code;
 	free(ctx->info);
     free(ctx);
 
@@ -559,6 +675,29 @@ vpx_image_t* readPlanarFrame(vpx_image_t* container, void* data){
     return container;
 }
 
+/*----- Writer Methods -----*/
+
+vp9a_error_t writeToWriter(vp9a_encode_ctx_t* ctx, const vpx_codec_cx_pkt_t* pkt) {
+    ctx->last_was_key = (pkt->data.frame.flags & VPX_FRAME_IS_KEY) != 0;
+    if (!vpx_video_writer_write_frame(ctx->target.writer, pkt->data.frame.buf, pkt->data.frame.sz, pkt->data.frame.pts)) {
+        return CODEC_ERROR;
+    }
+    ctx->time_pos = pkt->data.frame.pts;
+    ctx->amt_written = (uint32_t)pkt->data.frame.sz;
+
+    return NO_ERROR;
+}
+
+vp9a_error_t writeToBuffer(vp9a_encode_ctx_t* ctx, const vpx_codec_cx_pkt_t* pkt) {
+    if (!pkt) return CODEC_ERROR;
+    ctx->last_was_key = (pkt->data.frame.flags & VPX_FRAME_IS_KEY) != 0;
+    ctx->time_pos = pkt->data.frame.pts;
+
+    memcpy(ctx->target.buffer_ptr, pkt->data.frame.buf, pkt->data.frame.sz);
+    
+    return NO_ERROR;
+}
+
 /*----- Misc. Utils -----*/
 
 int vp9a_freeError(vp9a_encode_ctx_t* ctx){
@@ -568,13 +707,13 @@ int vp9a_freeError(vp9a_encode_ctx_t* ctx){
 	
 	if(ctx == NULL) return 0;
 	
-	if(ctx->outpath) free(ctx->outpath);
-	
     if(ctx->img_container) vpx_img_free(ctx->img_container);
     if (ctx->codec){
 		if (vpx_codec_destroy(ctx->codec)) err = 1;
 	}
-    if(ctx->writer) vpx_video_writer_close(ctx->writer);
+    if(ctx->outpath && ctx->target.writer) vpx_video_writer_close(ctx->target.writer);
+
+    if (ctx->outpath) free(ctx->outpath);
 	
 	if(ctx->vpxinfo) free(ctx->vpxinfo);
     if(ctx->cfg) free(ctx->cfg);
