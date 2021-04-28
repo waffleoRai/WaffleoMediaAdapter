@@ -10,7 +10,7 @@
 #include "libvpx/tools_common.h"
 #include "libvpx/video_writer.h"
 #include "mediaadapterutils.h"
-#include "videoDefs.h"
+#include "vidUtils.h"
 
 //Pass a flags field (16 bits) with encoding info
 /*
