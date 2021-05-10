@@ -39,6 +39,7 @@ extern "C" {
     } rgb_img_t;
 
     typedef WRMA_DLL_API struct vid_info {
+        //Size: 36
 
         int width;
         int height;
@@ -49,6 +50,7 @@ extern "C" {
         int total_frames;
 
         uint16_t flags;
+        uint16_t RES0;
         int32_t bitrate;
         int32_t keyintr;
 
@@ -58,9 +60,8 @@ extern "C" {
 
         uint32_t sample_rate;
         uint32_t bit_depth;
-        uint8_t channels;
-
         uint32_t frame_count;
+        uint8_t channels;
         bool interleaved;
 
     } aud_info_t;

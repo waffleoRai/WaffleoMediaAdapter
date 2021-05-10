@@ -4,7 +4,6 @@
 #include "mediaadapterutils.h"
 #include <cstdint>
 
-using namespace std;
 using namespace FLAC;
 
 /*
@@ -23,7 +22,7 @@ JNIEXPORT jlong JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_openStre
   (JNIEnv * env, jobject obj, jstring filepath, jint samplerate, jint bitdepth, jint channels, jint framecount){
 	  
 	  //Allocate encoder
-	  Encoder::File* enc = new Encoder::File();
+	  /*Encoder::File* enc = new Encoder::File();
 	  
 	  //Set encoder parameters
 	  enc->set_sample_rate(static_cast<u32>(samplerate));
@@ -44,14 +43,15 @@ JNIEXPORT jlong JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_openStre
 	  }
 	  
 	  //Convert encoder pointer and return
-	   return static_cast<jlong>(reinterpret_cast<uintptr_t>(enc));
+	   return static_cast<jlong>(reinterpret_cast<uintptr_t>(enc));*/
+	   return 0;
 }
  
  /*
 */
 JNIEXPORT jint JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_getSamplesPerBlock
   (JNIEnv * env, jobject obj, jlong ehandle){
-	  if(ehandle == 0) return -1;
+	  /*if(ehandle == 0) return -1;
 	  
 	  //Resolve pointer
 	  Encoder::File* enc = reinterpret_cast<Encoder::File*>(static_cast<uintptr_t>(ehandle));
@@ -59,7 +59,8 @@ JNIEXPORT jint JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_getSample
 	  
 	  //Return result
 	  uint32_t bsz = enc->get_blocksize();
-	  return static_cast<jint>(bsz);
+	  return static_cast<jint>(bsz);*/
+	  return 0;
 }
 
 /*
@@ -68,7 +69,7 @@ JNIEXPORT jint JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_passSampl
   (JNIEnv * env, jobject obj, jlong ehandle, jintArray samp32, jint arrSize){
 	  
 	  //Resolve pointer
-	  if(ehandle == 0) return -1;
+	 /* if(ehandle == 0) return -1;
 	  Encoder::File* enc = reinterpret_cast<Encoder::File*>(static_cast<uintptr_t>(ehandle));
 	  if(enc == NULL) return -1;
 	  
@@ -98,7 +99,8 @@ JNIEXPORT jint JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_passSampl
 		  else return -1;
 	  }
 	  
-	  return scount;
+	  return scount;*/
+	  return 0;
  }
 
 /*
@@ -107,12 +109,12 @@ JNIEXPORT jboolean JNICALL Java_waffleoRai_1MediaAdapter_audio_FLACEncoder_close
   (JNIEnv * env, jobject obj, jlong ehandle){
 	  
 	  //Resolve pointer
-	  if(ehandle == 0) return false;
+	 /* if(ehandle == 0) return false;
 	  Encoder::File* enc = reinterpret_cast<Encoder::File*>(static_cast<uintptr_t>(ehandle));
 	  if(enc == NULL) return false;
 	  
 	  enc->finish();
-	  delete enc;
+	  delete enc;*/
 	  
 	  return true;
   }

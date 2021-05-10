@@ -64,6 +64,8 @@ using std::queue;
 using icu::UnicodeString;
 using LIBEBML_NAMESPACE::UTFstring;
 
+using namespace LIBMATROSKA_NAMESPACE;
+
 namespace WaffleoMediaAdapter {
 
 	//# of nanoseconds per time unit (ie. if 1000000, then time unit is in millis)
@@ -75,36 +77,37 @@ namespace WaffleoMediaAdapter {
 
 	}BufferLoc_t;
 
-	typedef struct TrackBookmark {
-		uint64_t head_time = 0; //Time at cluster start
-		uint64_t ctime = 0; //Millis written to cluster so far.
-		KaxTrackEntry* kaxtrack = NULL;
-		void (*cluster_written_callback)(uint64_t) = NULL; //Passes timestamp of next cluster (end of written cluster)
+	typedef WRMA_DLL_API struct TrackBookmark {
+		uint64_t head_time; //Time at cluster start
+		uint64_t ctime; //Millis written to cluster so far.
+		KaxTrackEntry* kaxtrack;
+		void (*cluster_written_callback)(uint64_t); //Passes timestamp of next cluster (end of written cluster)
 	}TrackBookmark_t;
 
+	//TODO write initializers for these! (can't set defos here)
 	typedef WRMA_DLL_API struct MkvAudioTrackInfo {
 		UTFstring name = L"untitled_track";
 		string lan = "eng";
 
+		uint64_t time_pos = 0; //For mkv to track current position
+		void (*cluster_written_callback)(uint64_t) = NULL;
+		void* codec_data = NULL;
+		size_t codec_data_size = 0;
+
 		uint32_t frames_per_block = 441;
 		uint32_t millis_per_block = 10;
-		int8_t blocks_per_cluster = 100;
 
 		uint32_t total_frames = 0; //Estimated length in audio frames
 		int encoding = AENCODING_FLAC; //Encoding pseudo enum
 
 		int32_t track_no = -1;
 		uint32_t track_uid = 0;
-		uint64_t time_pos = 0; //For mkv to track current position
-		void (*cluster_written_callback)(uint64_t) = NULL;
-
+	
 		int16_t sample_rate = 44100;
 		int16_t channels = 2;
+
+		int8_t blocks_per_cluster = 100;
 		int8_t bitDepth = 16;
-
-		void* codec_data = NULL;
-		size_t codec_data_size = 0;
-
 		bool new_clust_flag = true;
 
 	} MkvAudioTrackInfo_t;
@@ -112,6 +115,11 @@ namespace WaffleoMediaAdapter {
 	typedef WRMA_DLL_API struct MkvVideoTrackInfo {
 		UTFstring name = L"untitled_track";
 		string lan = "eng";
+
+		uint64_t time_pos = 0; //For mkv to track current position
+		void (*cluster_written_callback)(uint64_t) = NULL;
+		void* codec_data = NULL;
+		size_t codec_data_size = 0;
 
 		//Defaults to 60 fps
 		uint32_t frames_per_block = 3;
@@ -124,24 +132,19 @@ namespace WaffleoMediaAdapter {
 
 		int32_t track_no = -1;
 		uint32_t track_uid = 0;
-		uint64_t time_pos = 0; //For mkv to track current position
-		void (*cluster_written_callback)(uint64_t) = NULL;
-
-		bool interlaced = false;
-		int8_t field_order = FIELDORDER_UNSPECIFIED;
-		int8_t stereo_mode = VSTEREOMODE_UNSPECIFIED;
-		int8_t alpha_mode = VALPHAMODE_UNSPECIFIED;
 
 		int32_t pWidth = -1;
 		int32_t pHeight = -1;
 		int32_t dWidth = -1;
 		int32_t dHeight = -1;
 
-		int8_t resize_behavior = VRESIZE_KEEP_RATIO;
 		colorModel_t color = CLR_SETME;
 
-		void* codec_data = NULL;
-		size_t codec_data_size = 0;
+		bool interlaced = false;
+		int8_t field_order = FIELDORDER_UNSPECIFIED;
+		int8_t stereo_mode = VSTEREOMODE_UNSPECIFIED;
+		int8_t alpha_mode = VALPHAMODE_UNSPECIFIED;
+		int8_t resize_behavior = VRESIZE_KEEP_RATIO;
 
 		bool new_clust_flag = true;
 
@@ -157,24 +160,24 @@ namespace WaffleoMediaAdapter {
 		UTFstring write_app;
 		UTFstring title;
 
-		uint32_t millis_per_cluster = 1000;
-		uint64_t cluster_time = 0;
-		//uint8_t blocks_per_cluster = 5;
+		uint64_t cluster_time;// = 0;
 
 		//Output state
-		StdIOCallback* output = nullptr;
-		EbmlVoid* mseek_dummy = nullptr;
-		KaxSeekHead* metaseek = nullptr;
-		KaxSegment* segment = nullptr;
-		KaxCues* cues = nullptr;
-		uint64_t seg_size = 0;
-		bool isOpen = false;
+		StdIOCallback* output;// = nullptr;
+		EbmlVoid* mseek_dummy;// = nullptr;
+		KaxSeekHead* metaseek;// = nullptr;
+		KaxSegment* segment;// = nullptr;
+		KaxCues* cues;// = nullptr;
+		uint64_t seg_size;// = 0;
 		//queue<void*> block_ptr_q = queue<void*>(); //Copy block data here, then free after cluster written.
 
-		vector<TrackBookmark_t> vtrack_bookmarks = vector<TrackBookmark_t>(16);
-		vector<TrackBookmark_t> atrack_bookmarks = vector<TrackBookmark_t>(16);
+		vector<TrackBookmark_t> vtrack_bookmarks;// = vector<TrackBookmark_t>(16);
+		vector<TrackBookmark_t> atrack_bookmarks;// = vector<TrackBookmark_t>(16);
 		//uint64_t cluster_ts;
-		KaxCluster* current_cluster = nullptr;
+		KaxCluster* current_cluster;// = nullptr;
+
+		uint32_t millis_per_cluster;// = 1000;
+		bool isOpen;// = false;
 
 		const int loadVidTrackInfo(MkvVideoTrackInfo_t& tinfo, KaxTracks& tracks, TrackBookmark_t& bookmark);
 		const int loadAudTrackInfo(MkvAudioTrackInfo_t& tinfo, KaxTracks& tracks, TrackBookmark_t& bookmark);
@@ -188,7 +191,9 @@ namespace WaffleoMediaAdapter {
 		void clusterWriteCallback(uint64_t snaptime);
 
 	public:
-		MatroskaWriter():vtrack_files(16), atrack_files(16),write_app(L"waffleoRaiMediaAdapter"),title(L"UntitledMKV"),output(nullptr) {};
+		MatroskaWriter():vtrack_files(16), atrack_files(16),write_app(L"waffleoRaiMediaAdapter"),title(L"UntitledMKV"),output(nullptr), millis_per_cluster(1000),
+			cluster_time(0), mseek_dummy(nullptr), metaseek(nullptr), segment(nullptr),cues(nullptr),seg_size(0),isOpen(false), vtrack_bookmarks(16),
+			atrack_bookmarks(16), current_cluster(nullptr){};
 
 		//Getters
 		const UTFstring& getWriteApp() const { return write_app; }
@@ -197,7 +202,7 @@ namespace WaffleoMediaAdapter {
 		//const uint8_t getBlocksPerCluster() const { return blocks_per_cluster; }
 		const size_t getVideoTrackCount()const { return vtrack_files.size(); }
 		const size_t getAudioTrackCount()const { return atrack_files.size(); }
-		MkvVideoTrackInfo_t& getVideoTrackInfo(int idx) { return vtrack_files[idx]; }
+		MkvVideoTrackInfo_t& getVideoTrackInfo(int idx) { return vtrack_files[idx]; } //TODO eventually add exception throwing index check
 		MkvAudioTrackInfo_t& getAudioTrackInfo(int idx) { return atrack_files[idx]; }
 		const size_t getDuration() const; //In millis
 
@@ -229,30 +234,30 @@ namespace WaffleoMediaAdapter {
 		virtual const size_t writeUnit(void* data, bool indexme) = 0;
 		virtual void closeTrackWriter() = 0;
 
-		virtual ~MkvTrackWriter() { closeTrackWriter(); }
+		virtual ~MkvTrackWriter() {}
 	};
 
 	class WRMA_DLL_API MkvFlacTrackWriter:public MkvTrackWriter, protected FLAC::Encoder::Stream {
 	private:
 		MkvAudioTrackInfo_t* tinfo;
 		MatroskaWriter& target;
-		int atrack_idx;
 
-		ubyte* w_buffer = nullptr;
-		uint32_t w_buff_size = 0; //Current size
-		uint32_t w_buff_max_size = 0;
+		ubyte* w_buffer;// = nullptr;
+		uint32_t w_buff_size;// = 0; //Current size
+		uint32_t w_buff_max_size;// = 0;
 
 		//bool new_clust_flag = true;
 		uint64_t spos_raw; //Expected next sample based on block size
 		uint64_t spos_enc; //Next sample expected from encoder based on encoder reporting
 
-		bool input_interleaved = true;
-		int input_type = FLACINPUT_PCM_LE;
+		int atrack_idx;
+		int input_type;// = FLACINPUT_PCM_LE;
+		bool input_interleaved;// = true;
 
 		//queue<void*> pending_blocks = queue<void*>();
 
-		bool isOpen = false;
-		FLAC__StreamEncoderInitStatus init_stat = FLAC__STREAM_ENCODER_INIT_STATUS_OK;
+		bool isOpen;// = false;
+		FLAC__StreamEncoderInitStatus init_stat;// = FLAC__STREAM_ENCODER_INIT_STATUS_OK;
 
 		//void onClusterWrite(uint64_t timestamp) { new_clust_flag = true; }
 
@@ -260,9 +265,10 @@ namespace WaffleoMediaAdapter {
 		FLAC__StreamEncoderWriteStatus write_callback(const FLAC__byte buffer[], size_t bytes, unsigned samples, unsigned current_frame) override;
 
 	public:
-		MkvFlacTrackWriter(MatroskaWriter& writer) :target(writer) {
+		MkvFlacTrackWriter(MatroskaWriter& writer) :target(writer),w_buffer(nullptr),w_buff_size(0),w_buff_max_size(0),input_interleaved(true),input_type(FLACINPUT_PCM_LE),isOpen(false),
+		init_stat(FLAC__STREAM_ENCODER_INIT_STATUS_OK), spos_raw(0), spos_enc(0){
 			tinfo = &writer.addAudioTrack(AENCODING_FLAC);
-			atrack_idx = writer.getAudioTrackCount()-1;
+			atrack_idx = static_cast<int>(writer.getAudioTrackCount())-1;
 		}
 
 		MkvAudioTrackInfo_t& getTrackInfo() { return *tinfo; }
@@ -287,26 +293,27 @@ namespace WaffleoMediaAdapter {
 
 	class WRMA_DLL_API MkvVP9TrackWriter :public MkvTrackWriter {
 	private:
-		MkvVideoTrackInfo_t* tinfo = nullptr;
+		MkvVideoTrackInfo_t* tinfo;// = nullptr;
 		MatroskaWriter& target;
-		int vtrack_idx;
 
 		vid_info_t* vid_info;
 
 		//uint32_t frames_per_block = 1;
 		//uint32_t blocks_per_cluster = 60;
 
-		uint32_t fcount = 0; //Frames prepped for current block.
+		int vtrack_idx;
+		uint32_t fcount;// = 0; //Frames prepped for current block.
 
-		vp9a_encode_ctx_t* encctx = nullptr;
-		ubyte* w_buffer = nullptr;
-		uint32_t w_buff_size = 0; //Current size
-		uint32_t w_buff_max_size = 0;
+		vp9a_encode_ctx_t* encctx;// = nullptr;
+		ubyte* w_buffer;// = nullptr;
+		uint32_t w_buff_size;// = 0; //Current size
+		uint32_t w_buff_max_size;// = 0;
 
-		bool isOpen = false;
+		bool isOpen;// = false;
 
 	public:
-		MkvVP9TrackWriter(MatroskaWriter& writer, vid_info_t* vidinfo):target(writer) {
+		MkvVP9TrackWriter(MatroskaWriter& writer, vid_info_t* vidinfo):target(writer),fcount(0),encctx(nullptr),w_buffer(nullptr),w_buff_size(0),
+		w_buff_max_size(0),isOpen(false){
 			//Don't forget to update encoding on init when flags are parsed!
 			tinfo = &target.addVideoTrack(VENCODING_VP9);
 			vtrack_idx = writer.getVideoTrackCount() - 1;
@@ -332,16 +339,16 @@ namespace WaffleoMediaAdapter {
 	class WRMA_DLL_API MkvWriteManager {
 
 	private:
-		MatroskaWriter writer = MatroskaWriter();
-		vector<MkvTrackWriter*> tracks = vector<MkvTrackWriter*>(16);
+		MatroskaWriter writer;// = MatroskaWriter();
+		vector<MkvTrackWriter*> tracks;// = vector<MkvTrackWriter*>(16);
 
-		UTFstring write_app = L"waffleoRaiMediaAdapter";
-		UTFstring title = L"untitled_mkv";
+		UTFstring write_app;// = L"waffleoRaiMediaAdapter";
+		UTFstring title;// = L"untitled_mkv";
 
-		bool isOpen = false;
+		bool isOpen;// = false;
 
 	public:
-		MkvWriteManager() {}
+		MkvWriteManager():writer(),tracks(16),write_app(L"waffleoRaiMediaAdapter"),title(L"untitled_mkv"),isOpen(false) {}
 
 		const int32_t addVP9Track(vid_info_t* info);
 		const int32_t addFLACTrack(aud_info_t* info, int frames_per_block);

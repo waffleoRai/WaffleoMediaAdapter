@@ -3,13 +3,12 @@
 
 #include <stdio.h>
 
-#include "libvpx/vpx/vpx_image.h"
-#include "libvpx/vpx/vpx_encoder.h"
-#include "libvpx/vpx/vp8cx.h"
-#include "libvpx/vp9/common/vp9_common.h"
-#include "libvpx/tools_common.h"
-#include "libvpx/video_writer.h"
-#include "mediaadapterutils.h"
+#include "vpx/vpx_image.h"
+#include "vpx/vpx_encoder.h"
+#include "vpx/vp8cx.h"
+#include "vp9/common/vp9_common.h"
+#include "tools_common.h"
+#include "video_writer.h"
 #include "vidUtils.h"
 
 //Pass a flags field (16 bits) with encoding info
@@ -74,44 +73,47 @@ typedef WRMA_DLL_API enum vp9a_error{
 
 typedef WRMA_DLL_API struct vp9a_encode_ctx{
 
-    const char* outpath;
-    //FILE* fhandle;
-
-    vid_info_t* info;
-	int bytes_per_frame;
-
-    int frames_written;
-    int frames_per_callback;
-    void* (*write_callback)();
-
-    //Codec info
-    colorModel_t input_clr;
-    pixfmt_t input_fmt;
-    boolean use_vp9; //Flag
-    boolean is_lossless; //Flag
-    boolean sixteen; //16 bits per channel/pixel
-    boolean fullcolor;
-
-    int bitrate;
-    int keyframe_interval;
-
-    //Codec interface
+    char* outpath;
+    void* (*write_callback)(void);
     vpx_image_t* (*func_frameload)(vpx_image_t*, void*);
-    vpx_image_t* img_container;
-    vpx_codec_ctx_t* codec;
-    VpxVideoInfo* vpxinfo;
-    vpx_codec_enc_cfg_t* cfg;
+    vp9a_error_t(*writerMethod)(struct vp9a_encode_ctx*, const vpx_codec_cx_pkt_t*);
 
     union WriteTarget {
         VpxVideoWriter* writer;
         ubyte* buffer_ptr;
     } target;
-    uint32_t amt_written = 0;
-    vp9a_error_t(*writerMethod)(vp9a_encode_ctx_t*, const vpx_codec_cx_pkt_t*);
 
-    //Position/Last frame info
+
+    vid_info_t info; //36
+    int bytes_per_frame;
     uint64_t time_pos; //Time coord of last frame copied to output
-    boolean last_was_key; //Last frame copied to output was a keyframe
+    int frames_written;
+    int frames_per_callback;
+    
+    vpx_image_t img_container; //136 bytes
+    vpx_codec_ctx_t codec; //56
+    vpx_codec_enc_cfg_t cfg; //504
+    VpxVideoInfo vpxinfo; //20
+
+   // int bitrate;
+   // int keyframe_interval;
+    uint32_t amt_written; //Marks how much was written from the last packet
+
+    //Codec info
+    colorModel_t input_clr;
+    pixfmt_t input_fmt;
+    ubyte use_vp9; //Flag
+    ubyte is_lossless; //Flag
+    ubyte sixteen; //16 bits per channel/pixel
+    ubyte fullcolor;
+
+    //So know what to call vpx lib for release on close/free
+    ubyte init_img_cont;
+    ubyte init_codec;
+    ubyte init_cfg;
+
+    ubyte last_was_key; //Last frame copied to output was a keyframe
+    //Add new smaller fields here []
 
     //Error
     vp9a_error_t error_code;
@@ -140,7 +142,7 @@ WRMA_DLL_API vpx_image_t* readRGBFrame(vpx_image_t* container, void* data);
 WRMA_DLL_API vpx_image_t* readARGBFrame(vpx_image_t* container, void* data);
 WRMA_DLL_API vpx_image_t* readPlanarFrame(vpx_image_t* container, void* data);
 
-WRMA_DLL_API int vp9a_freeError(vp9a_encode_ctx_t* ctx);
+//WRMA_DLL_API int vp9a_freeError(vp9a_encode_ctx_t* ctx);
 WRMA_DLL_API void setTimebaseFromFramerate(vid_info_t* info);
 
 #ifdef __cplusplus

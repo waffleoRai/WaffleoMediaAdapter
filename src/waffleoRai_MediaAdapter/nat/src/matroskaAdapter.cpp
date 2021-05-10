@@ -403,19 +403,20 @@ namespace WaffleoMediaAdapter {
 		//If CURRENT track cluster is already full (but others aren't otherwise wouldn't pass above checks)
 		//Reject and return 0.
 		TrackBookmark_t* bookmark = NULL;
-		switch (trackType) {
-		case TRACKTYPE_VIDEO:
+		if (trackType == TRACKTYPE_VIDEO) {
 			if (videoTrackClusterIsFull(trackNo)) return 0;
 			bookmark = &vtrack_bookmarks[trackNo];
-			MkvVideoTrackInfo_t& tinfo = vtrack_files[trackNo];
-			tinfo.new_clust_flag = false;
-			break;
-		case TRACKTYPE_AUDIO:
+			MkvVideoTrackInfo_t& vtinfo = vtrack_files[trackNo];
+			vtinfo.new_clust_flag = false;
+		}
+		else if (trackType == TRACKTYPE_AUDIO) {
 			if (audioTrackClusterIsFull(trackNo)) return 0;
 			bookmark = &atrack_bookmarks[trackNo];
-			MkvAudioTrackInfo_t& tinfo = atrack_files[trackNo];
-			tinfo.new_clust_flag = false;
-			break;
+			MkvAudioTrackInfo_t& atinfo = atrack_files[trackNo];
+			atinfo.new_clust_flag = false;
+		}
+		if (!bookmark) {
+			return 0;
 		}
 
 		//Now add this new block and update bookmark
@@ -568,16 +569,21 @@ namespace WaffleoMediaAdapter {
 	const size_t MkvFlacTrackWriter::writeUnit(void* data, bool indexme) {
 
 		if (!data || !tinfo) return 0;
+		bool res = false;
 		uint32_t i, j,k;
 		uint32_t  fpb = tinfo->frames_per_block;
 		size_t sz = bytesPerUnit();
 		uint64_t spos = spos_enc;
 
-		switch (input_type) {
-		case FLACINPUT_PCM_LE:
+		if (input_type == FLACINPUT_PCM_LE) {
 			//Everything is going to have to be expanded anyway.
 			FLAC__int32** charr = (FLAC__int32**)malloc(tinfo->channels * sizeof(FLAC__int32*));
+			if (!charr) return 0;
 			FLAC__int32* inbuff = (FLAC__int32*)malloc(sz);
+			if (!inbuff) {
+				free(charr);
+				return 0;
+			}
 
 			FLAC__int32* ptr = inbuff;
 			for (i = 0; i < tinfo->channels; i++) {
@@ -623,44 +629,44 @@ namespace WaffleoMediaAdapter {
 			}
 
 
-			bool res = process(charr, fpb);
+			res = process(charr, fpb);
 			free(inbuff);
 			free(charr);
 			if (!res) return 0;
-			break;
-		case FLACINPUT_SAMP32_ARR:
+		}
+		else if (input_type == FLACINPUT_SAMP32_ARR) {
 			if (input_interleaved) {
 				//Should be able to cast and feed as-is
 				FLAC__int32* input = (FLAC__int32*)data;
-				bool res = process_interleaved(input, fpb);
+				res = process_interleaved(input, fpb);
 				if (!res) return 0;
 			}
 			else {
 				//Make ptr array for channel starts.
-				FLAC__int32** charr = (FLAC__int32**)malloc(tinfo->channels * sizeof(FLAC__int32*));
+				FLAC__int32** charr = (FLAC__int32**)malloc((static_cast<size_t>(tinfo->channels) + 1) * sizeof(FLAC__int32*));
+				if (!charr) return 0;
 				FLAC__int32* ptr = (FLAC__int32*)data;
 				for (i = 0; i < tinfo->channels; i++) {
 					charr[i] = ptr;
 					ptr += fpb;
 				}
-				bool res = process(charr, fpb);
+				res = process(charr, fpb);
 				free(charr); //whew almost forgot
 				if (!res) return 0;
 			}
-			break;
-		default: return 0; //Doesn't know what to do with it then, does it!
 		}
+		else return 0;
 
 		//Calculate time of this block
 		uint64_t samps = spos_enc - spos;
 		uint64_t stime = (samps * 1000)/ tinfo->sample_rate; //Floored, though # of samples even to the ms would be ideal input
 
 		//now pass to the mkv writer...
-		size_t res = target.writeBlock(w_buffer, w_buff_size, TRACKTYPE_AUDIO, atrack_idx, stime, indexme || tinfo->new_clust_flag);
+		size_t ressz = target.writeBlock(w_buffer, w_buff_size, TRACKTYPE_AUDIO, atrack_idx, stime, indexme || tinfo->new_clust_flag);
 		//Clear buffer
 		w_buff_size = 0;
 		spos_raw += fpb;
-		return res;
+		return ressz;
 	}
 
 	FLAC__StreamEncoderWriteStatus MkvFlacTrackWriter::write_callback(const FLAC__byte buffer[], size_t bytes, unsigned samples, unsigned current_frame) {
@@ -672,6 +678,7 @@ namespace WaffleoMediaAdapter {
 		if (bytes > space) {
 			w_buff_max_size = bytes + w_buff_size;
 			ubyte* temp = (ubyte*)malloc(w_buff_max_size);
+			if (!temp) return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
 			memcpy(temp, w_buffer, w_buff_size);
 			free(w_buffer);
 			w_buffer = temp;

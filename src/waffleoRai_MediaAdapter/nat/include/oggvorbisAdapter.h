@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+	//TODO Deinterleaving if needed?
+
 	typedef WRMA_DLL_API struct oggvorb_comment_set {
 
 		char** comments;
